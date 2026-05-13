@@ -1,0 +1,112 @@
+/*
+Copyright (c) 2025  Blue Robotics North Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+
+module ::Blueberry::Devices {
+
+	/*
+	 * Discriminator for ManifestEntry payloads. Each entry carries the
+	 * fields relevant to its kind; unused fields are zero.
+	 */
+	enum ManifestEntryKind : uint8 {
+		BUILDER    = 0x01,
+		PARSER     = 0x02,
+		PERIPHERAL = 0x03,
+		VARIABLE   = 0x04,
+		IDENTITY   = 0x05
+	};
+
+	/*
+	 * Bitfield flags describing readable/writable access on variable
+	 * entries in a ManifestPart payload.
+	 */
+	enum ManifestVarFlags : uint8 {
+		NONE     = 0x00,
+		READABLE = 0x01,
+		WRITABLE = 0x02
+	};
+
+	/*
+	 * Tagged-union-ish entry. Fields not relevant for a given kind are zero.
+	 * For BUILDER / PARSER:	moduleKey, messageKey (+ responseKey, expectedHz)
+	 * For PERIPHERAL:			peripheralId, name
+	 * For VARIABLE:			peripheralId, varFlags, name, unit, min/max, typeRef
+	 * For IDENTITY:			name (carries an identity attribute label)
+	 */
+	struct ManifestEntry {
+		ManifestEntryKind kind;
+		uint16 moduleKey;       //for builder/parser
+		uint16 messageKey;      //for builder/parser
+		uint16 responseKey;     //for parser; 0 = no response
+		uint16 expectedHz;      //for builder; 0 = unknown
+		uint16 peripheralId;    //links variable/builder/parser to peripheral
+		uint8  varFlags;        //ManifestVarFlags bitfield
+		string name;            //peripheral / variable / identity-attribute display name
+		string unit;            //variable unit ("m", "deg/s", ...)
+		float  minValue;
+		float  maxValue;
+		string typeRef;         //for variables: typedef name or primitive
+	};
+
+	typedef sequence <ManifestEntry> ManifestEntrySequence;
+
+	/*
+	 * A bidirectional handshake message. Host sends an empty placeholder to
+	 * request a manifest summary; device replies with counts + crc + version.
+	 */
+	@topic("blueberry/devices/{device_type}/{nid}/manifest-summary")
+	@message_key(0x9100)
+	message ManifestSummaryMessage {
+		uint16 schemaVersion;   //bump on breaking manifest format changes
+		uint32 manifestCrc;     //crc32 of the full assembled manifest bytes
+		uint16 totalParts;      //how many ManifestPart payloads to expect
+		uint16 builderCount;
+		uint16 parserCount;
+		uint16 peripheralCount;
+		uint16 variableCount;
+	};
+
+	/*
+	 * Host -> device: request the manifest stream.
+	 */
+	@topic("blueberry/devices/{device_type}/{nid}/get-manifest")
+	@message_key(0x9101)
+	message GetManifestMessage {
+		uint32 sinceCrc;        //0 = always, else only resend if crc changed
+		uint16 fromPartIndex;   //resume support
+	};
+
+	/*
+	 * Self-describing list of builder/parser/peripheral/variable entries.
+	 * Sent as multiple parts; reassembled by the host using
+	 * partIndex/totalParts.
+	 */
+	@topic("blueberry/devices/{device_type}/{nid}/manifest-part")
+	@message_key(0x9102)
+	message ManifestPartMessage {
+		uint16 partIndex;       //0-based
+		uint16 totalParts;
+		uint32 manifestCrc;     //matches ManifestSummaryMessage.manifestCrc
+		ManifestEntrySequence entries;
+	};
+
+};
