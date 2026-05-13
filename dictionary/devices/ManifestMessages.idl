@@ -60,11 +60,11 @@ module ::Blueberry::Devices {
 		uint16 expectedHz;      //for builder; 0 = unknown
 		uint16 peripheralId;    //links variable/builder/parser to peripheral
 		uint8  varFlags;        //ManifestVarFlags bitfield
-		string name;            //peripheral / variable / identity-attribute display name
-		string unit;            //variable unit ("m", "deg/s", ...)
+		string<64> name;        //peripheral / variable / identity-attribute display name
+		string<16> unit;        //variable unit ("m", "deg/s", ...)
 		float  minValue;
 		float  maxValue;
-		string typeRef;         //for variables: typedef name or primitive
+		string<32> typeRef;     //for variables: typedef name or primitive
 	};
 
 	typedef sequence <ManifestEntry> ManifestEntrySequence;
